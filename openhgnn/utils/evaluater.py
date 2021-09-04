@@ -3,10 +3,11 @@ import numpy as np
 import torch as th
 from sklearn.cluster import KMeans
 from sklearn.metrics import normalized_mutual_info_score, adjusted_rand_score
-from sklearn.metrics import f1_score, accuracy_score, ndcg_score
+from sklearn.metrics import f1_score, accuracy_score, ndcg_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.linear_model import LogisticRegression
 import sklearn.metrics as Metric
+from collections import defaultdict
 from ogb.nodeproppred import Evaluator
 
 class Evaluator():
@@ -49,6 +50,30 @@ class Evaluator():
     def ndcg(self, y_score, y_true):
         return ndcg_score(y_true, y_score, 10)
 
+    def roc_auc(self, y_score, y_true):
+        return roc_auc_score(y_true, y_score)
+
+    def mrr_hgb(self, edge_list, y_score, y_true):
+        mrr_list, cur_mrr = [], 0
+        t_dict, labels_dict, score_dict = defaultdict(list), defaultdict(list), defaultdict(list)
+        for i, h_id in enumerate(edge_list[0]):
+            t_dict[h_id].append(edge_list[1][i])
+            labels_dict[h_id].append(y_score[i])
+            score_dict[h_id].append(y_true[i])
+        for h_id in t_dict.keys():
+            score_array = np.array(score_dict[h_id])
+            '''rank_index'''
+            rank = np.argsort(-score_array)
+            '''rank label'''
+            sorted_label_array = np.array(labels_dict[h_id])[rank]
+            pos_index = np.where(sorted_label_array == 1)[0]
+            if len(pos_index) == 0:
+                continue
+            pos_min_rank = np.min(pos_index)
+            cur_mrr = 1 / (1 + pos_min_rank)
+            mrr_list.append(cur_mrr)
+        mrr = np.mean(mrr_list)
+        return mrr
     ''''''
     # Used in HetGNN
     def LR_pred(self, train_X, train_Y, test_X):

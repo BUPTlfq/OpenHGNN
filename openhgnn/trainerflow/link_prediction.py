@@ -32,6 +32,22 @@ class NegativeSampler(object):
             result_dict[etype] = (src, dst)
         return result_dict
 
+class UniformNegativeSampler(object):
+    def __init__(self, g, k):
+        self.k = k
+        self.g = g
+
+    def __call__(self, eids_dict):
+        result_dict = {}
+        for etype, eids in eids_dict.items():
+            src, _ = self.g.find_edges(eids, etype=etype)
+            src = src.repeat_interleave(self.k)
+            dst_type = self.g.to_canonical_etype(etype)[2]
+            num_nodes = self.g.num_nodes(dst_type)
+            dst = np.random.randint(num_nodes, size=src.shape[0])
+            dst = th.LongTensor(dst)
+            result_dict[etype] = (src, dst)
+        return result_dict
 
 @register_flow("link_prediction")
 class LinkPrediction(BaseFlow):
@@ -203,9 +219,12 @@ class LinkPrediction(BaseFlow):
             n_score = self.ScorePredictor(self.neg_test_graph, embedding)
             n_score = th.reshape(n_score, (99, -1))
             matrix = th.cat((p_score, n_score), 0).t().cpu().numpy()
-
             y_true = np.zeros_like(matrix)
             y_true[:, 0] = 1
+            # source_list = th.cat(self.pos_test_graph.edges()[0], self.neg_test_graph.edges()[0]).t().cpu().numpy()
+            # target_list = th.cat(self.pos_test_graph.edges()[1], self.neg_test_graph.edges()[1]).t().cpu().numpy()
+            # edge_list = [source_list, target_list]
+            # metric = self.evaluator(edge_list, matrix, y_true)
             # _, indices = torch.sort(matrix, dim=0, descending=True)
             # rank = th.nonzero(indices == 0, as_tuple=True)[0]
             from sklearn.metrics import ndcg_score
